@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from thefuzz import fuzz
 from colorama import Fore, Style, init
 
-import movie_storage_sql as storage
+from storage import movie_storage_sql as storage
 
 MIN_MATCH_SCORE = 65
 

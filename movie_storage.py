@@ -8,7 +8,7 @@ and delete movies in a JSON file.
 
 import json
 
-MOVIES_FILE = "movies.json"
+MOVIES_FILE = "data/movies.json"
 
 
 def get_movies():

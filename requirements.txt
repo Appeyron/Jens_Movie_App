@@ -1,0 +1,6 @@
+colorama
+matplotlib
+requests
+SQLAlchemy
+thefuzz
+python-Levenshtein
