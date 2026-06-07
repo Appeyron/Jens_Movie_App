@@ -2,10 +2,10 @@
 Movie storage module using SQLAlchemy, SQLite, and OMDb API.
 """
 
+from pathlib import Path
+
 import requests
 from sqlalchemy import create_engine, text
-
-from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "data" / "movies.db"
@@ -14,7 +14,7 @@ DB_URL = f"sqlite:///{DB_PATH}"
 OMDB_API_KEY = "57991dc6"
 OMDB_URL = "https://www.omdbapi.com/"
 
-engine = create_engine(DB_URL)#, echo=True)
+engine = create_engine(DB_URL)  # , echo=True
 
 
 with engine.connect() as connection:
