@@ -205,8 +205,6 @@ def update_movie(active_user):
 
     storage.update_movie_note(title, note, active_user["id"])
 
-    print(f"{PROMPT_COLOR}Movie '{title}' successfully updated.")
-
 
 def delete_movie(active_user):
     """Delete a movie from the active user's collection."""
@@ -387,21 +385,25 @@ def generate_website(active_user):
         year = movie_data.get("year")
         rating = movie_data.get("rating")
         note = movie_data.get("note") or ""
-
+        imdb_id = movie_data.get("imdb_id")
 
         note_html = ""
 
         if note:
             note_html = f'<div class="movie-note">{note}</div>'
 
+        imdb_url = f"https://www.imdb.com/title/{imdb_id}/"
+
         movie_grid += f"""
         <li>
             <div class="movie">
                 <div class="poster-wrapper">
-                    <img class="movie-poster"
-                         src="{poster_url}"
-                         alt="{title}"
-                         title="{note}"/>
+                    <a href="{imdb_url}" target="_blank">
+                        <img class="movie-poster"
+                             src="{poster_url}"
+                             alt="{title}"
+                             title="{note}"/>
+                    </a>
                     {note_html}
                 </div>
                 <div class="movie-title">{title}</div>

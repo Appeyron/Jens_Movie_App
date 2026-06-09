@@ -21,6 +21,20 @@ OMDB_URL = "https://www.omdbapi.com/"
 engine = create_engine(DB_URL)
 
 
+def add_column_if_missing(connection, table_name, column_name, column_type):
+    """Add a column to a table if the column does not exist yet."""
+    result = connection.execute(text(f"PRAGMA table_info({table_name})"))
+    existing_columns = [row[1] for row in result.fetchall()]
+
+    if column_name not in existing_columns:
+        connection.execute(
+            text(f"""
+                ALTER TABLE {table_name}
+                ADD COLUMN {column_name} {column_type}
+            """)
+        )
+
+
 with engine.connect() as connection:
     connection.execute(text("PRAGMA foreign_keys = ON"))
 
@@ -31,15 +45,6 @@ with engine.connect() as connection:
         )
     """))
 
-    try:
-        connection.execute(text("""
-            ALTER TABLE movies
-            ADD COLUMN note TEXT
-        """))
-        connection.commit()
-    except Exception:
-        pass
-
     connection.execute(text("""
         CREATE TABLE IF NOT EXISTS movies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,10 +54,14 @@ with engine.connect() as connection:
             rating REAL NOT NULL,
             poster_url TEXT,
             note TEXT,
+            imdb_id TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id),
             UNIQUE(user_id, title)
         )
     """))
+
+    add_column_if_missing(connection, "movies", "note", "TEXT")
+    add_column_if_missing(connection, "movies", "imdb_id", "TEXT")
 
     connection.commit()
 
@@ -135,7 +144,7 @@ def list_movies(user_id):
     with engine.connect() as connection:
         result = connection.execute(
             text("""
-                SELECT title, year, rating, poster_url, note
+                SELECT title, year, rating, poster_url, note, imdb_id
                 FROM movies
                 WHERE user_id = :user_id
                 ORDER BY title
@@ -151,6 +160,7 @@ def list_movies(user_id):
             "rating": row[2],
             "poster_url": row[3],
             "note": row[4],
+            "imdb_id": row[5],
         }
         for row in movies
     }
@@ -182,6 +192,7 @@ def fetch_movie_from_omdb(title):
             "year": int(data.get("Year", 0)[:4]),
             "rating": float(imdb_rating),
             "poster_url": data.get("Poster"),
+            "imdb_id": data.get("imdbID"),
         }
 
     except requests.RequestException as error:
@@ -211,14 +222,16 @@ def add_movie(title, user_id, username):
                         title,
                         year,
                         rating,
-                        poster_url
+                        poster_url,
+                        imdb_id
                     )
                     VALUES (
                         :user_id,
                         :title,
                         :year,
                         :rating,
-                        :poster_url
+                        :poster_url,
+                        :imdb_id
                     )
                 """),
                 movie,
