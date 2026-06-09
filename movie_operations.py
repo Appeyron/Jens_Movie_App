@@ -385,7 +385,9 @@ def generate_website(active_user):
     for title, movie_data in movies.items():
         poster_url = movie_data.get("poster_url")
         year = movie_data.get("year")
+        rating = movie_data.get("rating")
         note = movie_data.get("note") or ""
+
 
         note_html = ""
 
@@ -404,6 +406,7 @@ def generate_website(active_user):
                 </div>
                 <div class="movie-title">{title}</div>
                 <div class="movie-year">{year}</div>
+                <div class="movie-rating">⭐ {rating}</div>
             </div>
         </li>
         """

@@ -73,3 +73,9 @@ body {
 .poster-wrapper:hover .movie-note {
     display: block;
 }
+
+.movie-rating {
+    font-size: 14px;
+    font-weight: bold;
+    margin-top: 4px;
+}
