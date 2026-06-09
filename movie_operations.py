@@ -386,6 +386,8 @@ def generate_website(active_user):
         rating = movie_data.get("rating")
         note = movie_data.get("note") or ""
         imdb_id = movie_data.get("imdb_id")
+        country = movie_data.get("country") or ""
+        flag = movie_data.get("flag") or ""
 
         note_html = ""
 
@@ -409,6 +411,7 @@ def generate_website(active_user):
                 <div class="movie-title">{title}</div>
                 <div class="movie-year">{year}</div>
                 <div class="movie-rating">⭐ {rating}</div>
+                <div class="movie-country">{flag} {country}</div>
             </div>
         </li>
         """

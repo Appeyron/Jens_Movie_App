@@ -20,6 +20,38 @@ OMDB_URL = "https://www.omdbapi.com/"
 
 engine = create_engine(DB_URL)
 
+COUNTRY_FLAGS = {
+    "USA": "🇺🇸",
+    "United States": "🇺🇸",
+    "UK": "🇬🇧",
+    "United Kingdom": "🇬🇧",
+    "Germany": "🇩🇪",
+    "France": "🇫🇷",
+    "Italy": "🇮🇹",
+    "Spain": "🇪🇸",
+    "Canada": "🇨🇦",
+    "Australia": "🇦🇺",
+    "Japan": "🇯🇵",
+    "South Korea": "🇰🇷",
+    "India": "🇮🇳",
+    "China": "🇨🇳",
+    "New Zealand": "🇳🇿",
+    "Mexico": "🇲🇽",
+    "Brazil": "🇧🇷",
+    "Argentina": "🇦🇷",
+    "Sweden": "🇸🇪",
+    "Norway": "🇳🇴",
+    "Denmark": "🇩🇰",
+    "Finland": "🇫🇮",
+    "Netherlands": "🇳🇱",
+    "Belgium": "🇧🇪",
+    "Austria": "🇦🇹",
+    "Switzerland": "🇨🇭",
+    "Ireland": "🇮🇪",
+    "Poland": "🇵🇱",
+    "Russia": "🇷🇺",
+}
+
 
 def add_column_if_missing(connection, table_name, column_name, column_type):
     """Add a column to a table if the column does not exist yet."""
@@ -33,6 +65,15 @@ def add_column_if_missing(connection, table_name, column_name, column_type):
                 ADD COLUMN {column_name} {column_type}
             """)
         )
+
+
+def get_flag_from_country(country_text):
+    """Return a flag emoji for the first country in the OMDb country field."""
+    if not country_text or country_text == "N/A":
+        return ""
+
+    first_country = country_text.split(",")[0].strip()
+    return COUNTRY_FLAGS.get(first_country, "")
 
 
 with engine.connect() as connection:
@@ -55,6 +96,8 @@ with engine.connect() as connection:
             poster_url TEXT,
             note TEXT,
             imdb_id TEXT,
+            country TEXT,
+            flag TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id),
             UNIQUE(user_id, title)
         )
@@ -62,6 +105,8 @@ with engine.connect() as connection:
 
     add_column_if_missing(connection, "movies", "note", "TEXT")
     add_column_if_missing(connection, "movies", "imdb_id", "TEXT")
+    add_column_if_missing(connection, "movies", "country", "TEXT")
+    add_column_if_missing(connection, "movies", "flag", "TEXT")
 
     connection.commit()
 
@@ -144,7 +189,15 @@ def list_movies(user_id):
     with engine.connect() as connection:
         result = connection.execute(
             text("""
-                SELECT title, year, rating, poster_url, note, imdb_id
+                SELECT
+                    title,
+                    year,
+                    rating,
+                    poster_url,
+                    note,
+                    imdb_id,
+                    country,
+                    flag
                 FROM movies
                 WHERE user_id = :user_id
                 ORDER BY title
@@ -161,6 +214,8 @@ def list_movies(user_id):
             "poster_url": row[3],
             "note": row[4],
             "imdb_id": row[5],
+            "country": row[6],
+            "flag": row[7],
         }
         for row in movies
     }
@@ -183,6 +238,8 @@ def fetch_movie_from_omdb(title):
             return None
 
         imdb_rating = data.get("imdbRating")
+        country = data.get("Country")
+        flag = get_flag_from_country(country)
 
         if imdb_rating == "N/A":
             imdb_rating = 0
@@ -193,6 +250,8 @@ def fetch_movie_from_omdb(title):
             "rating": float(imdb_rating),
             "poster_url": data.get("Poster"),
             "imdb_id": data.get("imdbID"),
+            "country": country,
+            "flag": flag,
         }
 
     except requests.RequestException as error:
@@ -223,7 +282,9 @@ def add_movie(title, user_id, username):
                         year,
                         rating,
                         poster_url,
-                        imdb_id
+                        imdb_id,
+                        country,
+                        flag
                     )
                     VALUES (
                         :user_id,
@@ -231,7 +292,9 @@ def add_movie(title, user_id, username):
                         :year,
                         :rating,
                         :poster_url,
-                        :imdb_id
+                        :imdb_id,
+                        :country,
+                        :flag
                     )
                 """),
                 movie,

@@ -101,3 +101,9 @@ main {
     font-weight: bold;
     font-size: 14px;
 }
+
+.movie-country {
+    margin-top: 6px;
+    font-size: 14px;
+    color: #555;
+}
