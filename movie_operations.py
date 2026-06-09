@@ -1,14 +1,14 @@
 """
 Movie database application.
 
-Provides menu handling, movie management,
-searching, filtering, statistics, and histogram creation.
+Provides user profile handling, movie management,
+searching, statistics, and website generation.
 """
 
 import random
 
-from thefuzz import fuzz
 from colorama import Fore, Style, init
+from thefuzz import fuzz
 
 from storage import movie_storage_sql as storage
 
@@ -20,18 +20,58 @@ PROMPT_COLOR = Fore.WHITE
 INPUT_COLOR = Fore.CYAN
 
 
-def show_menu(wait_for_input=False, show_title=False):
-    """
-    Display the menu.
-    Optionally wait for user input and/or show the title.
-    """
+def select_user_profile():
+    """Let the user select or create a user profile."""
+    print(f"\n{Fore.YELLOW}Welcome to the Movie App!")
+
+    while True:
+        users = storage.list_users()
+
+        print(f"\n{PROMPT_COLOR}Select a user:")
+
+        for index, user in enumerate(users, start=1):
+            print(f"{index}. {user['name']}")
+
+        print(f"{len(users) + 1}. Create new user")
+
+        choice = input(
+            f"{PROMPT_COLOR}Enter choice: {INPUT_COLOR}"
+        ).strip()
+
+        if not choice.isdigit():
+            print(f"{Fore.RED}Please enter a number.")
+            continue
+
+        choice_number = int(choice)
+
+        if 1 <= choice_number <= len(users):
+            selected_user = users[choice_number - 1]
+            print(f"\n{PROMPT_COLOR}Welcome {selected_user['name']}!")
+            return selected_user
+
+        if choice_number == len(users) + 1:
+            username = get_non_empty_input("Enter new username: ")
+            new_user = storage.add_user(username)
+
+            if new_user is not None:
+                print(f"{PROMPT_COLOR}User '{username}' created.")
+                return new_user
+
+        print(f"{Fore.RED}Invalid choice.")
+
+
+def show_menu(wait_for_input=False, show_title=False, active_user=None):
+    """Display the menu."""
     if wait_for_input:
         input(f"\n{Fore.YELLOW}Press enter to continue")
 
     if show_title:
-        print(f"\n{Fore.YELLOW}** ** ** ** ** My Movies Database ** ** ** ** **")
+        print(f"\n{Fore.YELLOW}** ** ** My Movies Database ** ** **")
+
+    username = active_user["name"] if active_user else "No user"
 
     menu_text = (
+        f"\nActive user: {username}\n"
         "\nMenu:\n"
         "0. Exit\n"
         "1. List movies\n"
@@ -41,25 +81,26 @@ def show_menu(wait_for_input=False, show_title=False):
         "5. Random movie\n"
         "6. Search movie\n"
         "7. Movies sorted by rating\n"
-        "8. Generate website"
+        "8. Generate website\n"
+        "9. Switch user"
     )
 
     print(Fore.YELLOW + menu_text + Style.RESET_ALL)
 
 
 def get_users_choice():
-    """
-    Ask the user to choose a menu option.
-    Return the user input as a clean string.
-    """
-    print(f"\n{Fore.YELLOW}Enter choice (0-11):", end="")
+    """Ask the user to choose a menu option."""
+    print(f"\n{Fore.YELLOW}Enter choice (0-9):", end="")
     return input(f"{INPUT_COLOR}").strip()
 
 
-def execute_users_choice(chosen_option):
+def execute_users_choice(chosen_option, active_user):
     """
-    Execute the function that belongs to the chosen menu option.
-    Return False if the program should stop.
+    Execute the selected menu option.
+
+    Return False to exit.
+    Return a user dictionary when the active user changes.
+    Return None to keep the current user.
     """
     menu_dispatcher = {
         "1": list_movies,
@@ -69,88 +110,59 @@ def execute_users_choice(chosen_option):
         "5": random_movie,
         "6": search_movie,
         "7": movies_sorted_by_rating,
-        "8": generate_website
+        "8": generate_website,
     }
 
     if chosen_option == "0":
         print(f"{PROMPT_COLOR}Bye!")
         return False
 
+    if chosen_option == "9":
+        return select_user_profile()
+
     if chosen_option in menu_dispatcher:
         try:
-            menu_dispatcher[chosen_option]()
+            menu_dispatcher[chosen_option](active_user)
         except (
-                ValueError,
-                TypeError,
-                KeyError,
-                RuntimeError
+            ValueError,
+            TypeError,
+            KeyError,
+            RuntimeError,
         ) as error:
             print(f"{Fore.RED}Unexpected error: {error}")
     else:
-        print(f"{Fore.RED}Invalid choice. Please enter a number from 0 to 11.")
+        print(f"{Fore.RED}Invalid choice. Please enter a number from 0 to 9.")
 
-    show_menu(wait_for_input=True)
-    return True
+    show_menu(wait_for_input=True, active_user=active_user)
+    return None
 
 
-def get_non_empty_title(prompt):
-    """
-    Ask for a movie title until the input is not empty.
-    """
+def get_non_empty_input(prompt):
+    """Ask for input until it is not empty."""
     while True:
-        title = input(f"{PROMPT_COLOR}{prompt}{INPUT_COLOR}").strip()
+        user_input = input(f"{PROMPT_COLOR}{prompt}{INPUT_COLOR}").strip()
 
-        if title != "":
-            return title
+        if user_input:
+            return user_input
 
-        print(f"{Fore.RED}Movie title must not be empty.")
-
-
-def get_filename(prompt):
-    """
-    Ask for a filename until the input is not empty.
-    """
-    while True:
-        filename = input(f"{PROMPT_COLOR}{prompt}{INPUT_COLOR}").strip()
-
-        if filename != "":
-            return filename
-
-        print(f"{Fore.RED}Filename must not be empty.")
+        print(f"{Fore.RED}Input must not be empty.")
 
 
-def get_chronological_order():
-    """
-    Ask whether latest movies should be shown first or last.
-    Return True if latest movies should be first.
-    """
-    while True:
-        print(f"{PROMPT_COLOR}How do you want to sort the movies?")
-        print("1. Latest movies first")
-        print("2. Latest movies last")
-
-        choice = input(f"{PROMPT_COLOR}Enter choice (1-2): {INPUT_COLOR}").strip()
-
-        if choice == "1":
-            return True
-
-        if choice == "2":
-            return False
-
-        print(f"{Fore.RED}Invalid choice. Please enter 1 or 2.")
-
-
-def list_movies():
-    """
-    Print all movies with year and rating.
-    """
-    movies = storage.list_movies()
+def list_movies(active_user):
+    """Print all movies of the active user."""
+    movies = storage.list_movies(active_user["id"])
 
     if not movies:
-        print(f"{Fore.RED}No movies found.")
+        print(
+            f"{Fore.RED}{active_user['name']}, "
+            f"your movie collection is empty. Add some movies!"
+        )
         return
 
-    print(f"\n{PROMPT_COLOR}{len(movies)} movies in total\n")
+    print(
+        f"\n{PROMPT_COLOR}{active_user['name']}, "
+        f"you have {len(movies)} movie(s):\n"
+    )
 
     for title, movie_data in movies.items():
         print(
@@ -160,50 +172,43 @@ def list_movies():
         )
 
 
-def add_movie():
-    """
-    Ask the user for movie data and add the movie to the JSON database.
-    """
-    movies = storage.list_movies()
+def add_movie(active_user):
+    """Add a movie to the active user's collection."""
+    movies = storage.list_movies(active_user["id"])
 
     while True:
-        title = get_non_empty_title("Enter new movie name: ")
+        title = get_non_empty_input("Enter new movie name: ")
 
         if title not in movies:
             break
 
-        print(f"{Fore.RED}Movie {title} already exists!")
+        print(f"{Fore.RED}Movie '{title}' already exists in your collection!")
 
-    storage.add_movie(title)
+    storage.add_movie(title, active_user["id"], active_user["name"])
 
 
-def delete_movie():
-    """
-    Ask the user for a movie title and delete it from the JSON database.
-    """
-    movies = storage.list_movies()
+def delete_movie(active_user):
+    """Delete a movie from the active user's collection."""
+    movies = storage.list_movies(active_user["id"])
 
     if not movies:
         print(f"{Fore.RED}No movies found.")
         return
 
     while True:
-        title = get_non_empty_title("Enter movie name to delete: ")
+        title = get_non_empty_input("Enter movie name to delete: ")
 
         if title in movies:
             break
 
-        print(f"{Fore.RED}Movie {title} does not exist.")
+        print(f"{Fore.RED}Movie '{title}' does not exist.")
 
-    storage.delete_movie(title)
+    storage.delete_movie(title, active_user["id"])
 
 
-def stats():
-    """
-    Print statistics about the movie ratings.
-    Display average and median with one decimal place.
-    """
-    movies = storage.list_movies()
+def stats(active_user):
+    """Print rating statistics for the active user's movies."""
+    movies = storage.list_movies(active_user["id"])
 
     if not movies:
         print(f"{Fore.RED}No movies found.")
@@ -244,25 +249,13 @@ def stats():
 
     print(f"\n{PROMPT_COLOR}Average rating: {average_rating:.1f}")
     print(f"Median rating: {median_rating:.1f}")
-
-    print(
-        f"Best movie(s): "
-        f"{', '.join(best_movies)}, "
-        f"{best_rating:.1f}"
-    )
-
-    print(
-        f"Worst movie(s): "
-        f"{', '.join(worst_movies)}, "
-        f"{worst_rating:.1f}"
-    )
+    print(f"Best movie(s): {', '.join(best_movies)}, {best_rating:.1f}")
+    print(f"Worst movie(s): {', '.join(worst_movies)}, {worst_rating:.1f}")
 
 
-def random_movie():
-    """
-    Print one random movie suggestion.
-    """
-    movies = storage.list_movies()
+def random_movie(active_user):
+    """Print one random movie suggestion."""
+    movies = storage.list_movies(active_user["id"])
 
     if not movies:
         print(f"{Fore.RED}No movies found.")
@@ -279,18 +272,15 @@ def random_movie():
     )
 
 
-def search_movie():
-    """
-    Search for movies by partial match.
-    If no partial match is found, show similar movies with fuzzy matching.
-    """
-    movies = storage.list_movies()
+def search_movie(active_user):
+    """Search movies in the active user's collection."""
+    movies = storage.list_movies(active_user["id"])
 
     if not movies:
         print(f"{Fore.RED}No movies found.")
         return
 
-    search_term = get_non_empty_title("\nEnter part of movie name: ").lower()
+    search_term = get_non_empty_input("\nEnter part of movie name: ").lower()
 
     matching_movies = []
 
@@ -312,7 +302,7 @@ def search_movie():
 
     fuzzy_matches = []
 
-    for title, movie_data, match_score in fuzzy_matches:
+    for title, movie_data in movies.items():
         match_score = fuzz.token_set_ratio(search_term, title.lower())
 
         if match_score >= MIN_MATCH_SCORE:
@@ -329,19 +319,18 @@ def search_movie():
 
     print(f"{PROMPT_COLOR}Movie not exactly found, but similar ones:")
 
-    for title, movie_data in fuzzy_matches:
+    for title, movie_data, match_score in fuzzy_matches:
         print(
             f"{title} "
             f"({movie_data['year']}): "
-            f"{movie_data['rating']}"
+            f"{movie_data['rating']} "
+            f"(match: {match_score}%)"
         )
 
 
-def movies_sorted_by_rating():
-    """
-    Print all movies sorted by rating from highest to lowest.
-    """
-    movies = storage.list_movies()
+def movies_sorted_by_rating(active_user):
+    """Print movies sorted by rating."""
+    movies = storage.list_movies(active_user["id"])
 
     if not movies:
         print(f"{Fore.RED}No movies found.")
@@ -363,9 +352,9 @@ def movies_sorted_by_rating():
         )
 
 
-def generate_website():
-    """Generate an HTML website from the movies database."""
-    movies = storage.list_movies()
+def generate_website(active_user):
+    """Generate an HTML website for the active user."""
+    movies = storage.list_movies(active_user["id"])
 
     with open("index_template.html", "r", encoding="utf-8") as file:
         template = file.read()
@@ -392,7 +381,14 @@ def generate_website():
         movie_grid
     )
 
-    with open("index.html", "w", encoding="utf-8") as file:
+    html_content = html_content.replace(
+        "__USERNAME__",
+        active_user["name"]
+    )
+
+    filename = f"{active_user['name']}_movies.html"
+
+    with open(filename, "w", encoding="utf-8") as file:
         file.write(html_content)
 
-    print("Website was generated successfully")
+    print(f"Website '{filename}' was generated successfully.")

@@ -2,17 +2,20 @@ import movie_operations as mo
 
 
 def main():
-    """
-    Start the movie database program and handle the main loop.
-    """
-    mo.show_menu(show_title=True)
+    """Start the movie database program."""
+    active_user = mo.select_user_profile()
+
+    mo.show_menu(show_title=True, active_user=active_user)
 
     while True:
         chosen_option = mo.get_users_choice()
-        should_continue = mo.execute_users_choice(chosen_option)
+        result = mo.execute_users_choice(chosen_option, active_user)
 
-        if not should_continue:
+        if result is False:
             break
+
+        if result is not None:
+            active_user = result
 
 
 if __name__ == "__main__":

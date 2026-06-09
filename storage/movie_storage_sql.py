@@ -1,11 +1,15 @@
 """
 Movie storage module using SQLAlchemy, SQLite, and OMDb API.
+
+Supports multiple user profiles.
+Each movie belongs to one user.
 """
 
 from pathlib import Path
 
 import requests
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "data" / "movies.db"
@@ -14,28 +18,121 @@ DB_URL = f"sqlite:///{DB_PATH}"
 OMDB_API_KEY = "57991dc6"
 OMDB_URL = "https://www.omdbapi.com/"
 
-engine = create_engine(DB_URL)  # , echo=True
+engine = create_engine(DB_URL)
 
 
 with engine.connect() as connection:
+    connection.execute(text("PRAGMA foreign_keys = ON"))
+
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    """))
+
     connection.execute(text("""
         CREATE TABLE IF NOT EXISTS movies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT UNIQUE NOT NULL,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
             year INTEGER NOT NULL,
             rating REAL NOT NULL,
-            poster_url TEXT
+            poster_url TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, title)
         )
     """))
+
     connection.commit()
 
 
-def list_movies():
-    """Retrieve all movies from the database."""
+def list_users():
+    """Retrieve all users from the database."""
     with engine.connect() as connection:
         result = connection.execute(
-            text("SELECT title, year, rating, poster_url FROM movies")
+            text("""
+                SELECT id, name
+                FROM users
+                ORDER BY name
+            """)
         )
+
+        users = result.fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "name": row[1],
+        }
+        for row in users
+    ]
+
+
+def add_user(name):
+    """Add a new user profile."""
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("""
+                    INSERT INTO users (name)
+                    VALUES (:name)
+                """),
+                {"name": name},
+            )
+
+            connection.commit()
+
+            return {
+                "id": result.lastrowid,
+                "name": name,
+            }
+
+    except IntegrityError:
+        print(f"User '{name}' already exists.")
+        return get_user_by_name(name)
+
+    except SQLAlchemyError as error:
+        print(f"Database error: {error}")
+        return None
+
+
+def get_user_by_name(name):
+    """Retrieve one user by name."""
+    with engine.connect() as connection:
+        result = connection.execute(
+            text("""
+                SELECT id, name
+                FROM users
+                WHERE name = :name
+            """),
+            {"name": name},
+        )
+
+        row = result.fetchone()
+
+    if row is None:
+        return None
+
+    return {
+        "id": row[0],
+        "name": row[1],
+    }
+
+
+def list_movies(user_id):
+    """Retrieve all movies for one user."""
+    with engine.connect() as connection:
+        result = connection.execute(
+            text("""
+                SELECT title, year, rating, poster_url
+                FROM movies
+                WHERE user_id = :user_id
+                ORDER BY title
+            """),
+            {"user_id": user_id},
+        )
+
         movies = result.fetchall()
 
     return {
@@ -64,10 +161,15 @@ def fetch_movie_from_omdb(title):
             print(f"Movie '{title}' not found in OMDb.")
             return None
 
+        imdb_rating = data.get("imdbRating")
+
+        if imdb_rating == "N/A":
+            imdb_rating = 0
+
         return {
             "title": data.get("Title"),
-            "year": int(data.get("Year", 0)),
-            "rating": float(data.get("imdbRating", 0)),
+            "year": int(data.get("Year", 0)[:4]),
+            "rating": float(imdb_rating),
             "poster_url": data.get("Poster"),
         }
 
@@ -80,43 +182,69 @@ def fetch_movie_from_omdb(title):
         return None
 
 
-def add_movie(title):
-    """Add a movie by fetching its data from OMDb."""
+def add_movie(title, user_id, username):
+    """Add a movie to one user's collection."""
     movie = fetch_movie_from_omdb(title)
 
     if movie is None:
         return
 
-    with engine.connect() as connection:
-        try:
+    movie["user_id"] = user_id
+
+    try:
+        with engine.connect() as connection:
             connection.execute(
                 text("""
-                    INSERT INTO movies (title, year, rating, poster_url)
-                    VALUES (:title, :year, :rating, :poster_url)
+                    INSERT INTO movies (
+                        user_id,
+                        title,
+                        year,
+                        rating,
+                        poster_url
+                    )
+                    VALUES (
+                        :user_id,
+                        :title,
+                        :year,
+                        :rating,
+                        :poster_url
+                    )
                 """),
                 movie,
             )
 
             connection.commit()
-            print(f"Movie '{movie['title']}' added successfully.")
 
-        except Exception as error:
-            print(f"Error: {error}")
+        print(
+            f"Movie '{movie['title']}' "
+            f"added to {username}'s collection!"
+        )
+
+    except IntegrityError:
+        print(
+            f"Movie '{movie['title']}' "
+            f"already exists in {username}'s collection."
+        )
+
+    except SQLAlchemyError as error:
+        print(f"Database error: {error}")
 
 
-def update_movie(title, rating):
-    """Update a movie's rating in the database."""
-    with engine.connect() as connection:
-        try:
+def update_movie(title, rating, user_id):
+    """Update a movie's rating for one user."""
+    try:
+        with engine.connect() as connection:
             result = connection.execute(
                 text("""
                     UPDATE movies
                     SET rating = :rating
                     WHERE title = :title
+                    AND user_id = :user_id
                 """),
                 {
                     "title": title,
                     "rating": rating,
+                    "user_id": user_id,
                 },
             )
 
@@ -127,20 +255,24 @@ def update_movie(title, rating):
             else:
                 print(f"Movie '{title}' not found.")
 
-        except Exception as error:
-            print(f"Error: {error}")
+    except SQLAlchemyError as error:
+        print(f"Database error: {error}")
 
 
-def delete_movie(title):
-    """Delete a movie from the database."""
-    with engine.connect() as connection:
-        try:
+def delete_movie(title, user_id):
+    """Delete a movie from one user's collection."""
+    try:
+        with engine.connect() as connection:
             result = connection.execute(
                 text("""
                     DELETE FROM movies
                     WHERE title = :title
+                    AND user_id = :user_id
                 """),
-                {"title": title},
+                {
+                    "title": title,
+                    "user_id": user_id,
+                },
             )
 
             connection.commit()
@@ -150,5 +282,5 @@ def delete_movie(title):
             else:
                 print(f"Movie '{title}' not found.")
 
-        except Exception as error:
-            print(f"Error: {error}")
+    except SQLAlchemyError as error:
+        print(f"Database error: {error}")
