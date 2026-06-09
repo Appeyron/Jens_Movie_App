@@ -67,13 +67,54 @@ def add_column_if_missing(connection, table_name, column_name, column_type):
         )
 
 
+COUNTRY_CODES = {
+    "USA": "us",
+    "United States": "us",
+    "UK": "gb",
+    "United Kingdom": "gb",
+    "Germany": "de",
+    "France": "fr",
+    "Italy": "it",
+    "Spain": "es",
+    "Canada": "ca",
+    "Australia": "au",
+    "Japan": "jp",
+    "South Korea": "kr",
+    "India": "in",
+    "China": "cn",
+}
+
+
+COUNTRY_CODES = {
+    "USA": "us",
+    "United States": "us",
+    "UK": "gb",
+    "United Kingdom": "gb",
+    "Germany": "de",
+    "France": "fr",
+    "Italy": "it",
+    "Spain": "es",
+    "Canada": "ca",
+    "Australia": "au",
+    "Japan": "jp",
+    "South Korea": "kr",
+    "India": "in",
+    "China": "cn",
+}
+
+
 def get_flag_from_country(country_text):
-    """Return a flag emoji for the first country in the OMDb country field."""
+    """Return a flag image URL for the first country."""
     if not country_text or country_text == "N/A":
         return ""
 
     first_country = country_text.split(",")[0].strip()
-    return COUNTRY_FLAGS.get(first_country, "")
+    country_code = COUNTRY_CODES.get(first_country)
+
+    if not country_code:
+        return ""
+
+    return f"https://flagcdn.com/w40/{country_code}.png"
 
 
 with engine.connect() as connection:
@@ -238,11 +279,12 @@ def fetch_movie_from_omdb(title):
             return None
 
         imdb_rating = data.get("imdbRating")
-        country = data.get("Country")
-        flag = get_flag_from_country(country)
 
         if imdb_rating == "N/A":
             imdb_rating = 0
+
+        country = data.get("Country")
+        flag = get_flag_from_country(country)
 
         return {
             "title": data.get("Title"),

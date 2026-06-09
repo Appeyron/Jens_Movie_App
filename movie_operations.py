@@ -394,6 +394,15 @@ def generate_website(active_user):
         if note:
             note_html = f'<div class="movie-note">{note}</div>'
 
+        flag_html = ""
+
+        if flag:
+            flag_html = (
+                f'<img class="movie-flag" '
+                f'src="{flag}" '
+                f'alt="{country} flag">'
+            )
+
         imdb_url = f"https://www.imdb.com/title/{imdb_id}/"
 
         movie_grid += f"""
@@ -408,10 +417,16 @@ def generate_website(active_user):
                     </a>
                     {note_html}
                 </div>
+
                 <div class="movie-title">{title}</div>
                 <div class="movie-year">{year}</div>
                 <div class="movie-rating">⭐ {rating}</div>
-                <div class="movie-country">{flag} {country}</div>
+
+                <div class="movie-country">
+                    {flag_html}
+                    <span>{country}</span>
+                </div>
+
             </div>
         </li>
         """
@@ -427,4 +442,7 @@ def generate_website(active_user):
     with open(filename, "w", encoding="utf-8") as file:
         file.write(html_content)
 
-    print(f"{PROMPT_COLOR}Website '{filename}' was generated successfully.")
+    print(
+        f"{PROMPT_COLOR}"
+        f"Website '{filename}' was generated successfully."
+    )
