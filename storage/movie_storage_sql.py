@@ -31,6 +31,15 @@ with engine.connect() as connection:
         )
     """))
 
+    try:
+        connection.execute(text("""
+            ALTER TABLE movies
+            ADD COLUMN note TEXT
+        """))
+        connection.commit()
+    except Exception:
+        pass
+
     connection.execute(text("""
         CREATE TABLE IF NOT EXISTS movies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,6 +48,7 @@ with engine.connect() as connection:
             year INTEGER NOT NULL,
             rating REAL NOT NULL,
             poster_url TEXT,
+            note TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id),
             UNIQUE(user_id, title)
         )
@@ -125,7 +135,7 @@ def list_movies(user_id):
     with engine.connect() as connection:
         result = connection.execute(
             text("""
-                SELECT title, year, rating, poster_url
+                SELECT title, year, rating, poster_url, note
                 FROM movies
                 WHERE user_id = :user_id
                 ORDER BY title
@@ -140,6 +150,7 @@ def list_movies(user_id):
             "year": row[1],
             "rating": row[2],
             "poster_url": row[3],
+            "note": row[4],
         }
         for row in movies
     }
@@ -252,6 +263,35 @@ def update_movie(title, rating, user_id):
 
             if result.rowcount > 0:
                 print(f"Movie '{title}' updated successfully.")
+            else:
+                print(f"Movie '{title}' not found.")
+
+    except SQLAlchemyError as error:
+        print(f"Database error: {error}")
+
+
+def update_movie_note(title, note, user_id):
+    """Update a movie note for one user."""
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("""
+                    UPDATE movies
+                    SET note = :note
+                    WHERE title = :title
+                    AND user_id = :user_id
+                """),
+                {
+                    "title": title,
+                    "note": note,
+                    "user_id": user_id,
+                },
+            )
+
+            connection.commit()
+
+            if result.rowcount > 0:
+                print(f"Movie '{title}' successfully updated.")
             else:
                 print(f"Movie '{title}' not found.")
 

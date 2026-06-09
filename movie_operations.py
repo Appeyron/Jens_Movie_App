@@ -77,12 +77,13 @@ def show_menu(wait_for_input=False, show_title=False, active_user=None):
         "1. List movies\n"
         "2. Add movie\n"
         "3. Delete movie\n"
-        "4. Stats\n"
-        "5. Random movie\n"
-        "6. Search movie\n"
-        "7. Movies sorted by rating\n"
-        "8. Generate website\n"
-        "9. Switch user"
+        "4. Update movie\n"
+        "5. Stats\n"
+        "6. Random movie\n"
+        "7. Search movie\n"
+        "8. Movies sorted by rating\n"
+        "9. Generate website\n"
+        "10. Switch user"
     )
 
     print(Fore.YELLOW + menu_text + Style.RESET_ALL)
@@ -90,34 +91,29 @@ def show_menu(wait_for_input=False, show_title=False, active_user=None):
 
 def get_users_choice():
     """Ask the user to choose a menu option."""
-    print(f"\n{Fore.YELLOW}Enter choice (0-9):", end="")
+    print(f"\n{Fore.YELLOW}Enter choice (0-10):", end="")
     return input(f"{INPUT_COLOR}").strip()
 
 
 def execute_users_choice(chosen_option, active_user):
-    """
-    Execute the selected menu option.
-
-    Return False to exit.
-    Return a user dictionary when the active user changes.
-    Return None to keep the current user.
-    """
+    """Execute the selected menu option."""
     menu_dispatcher = {
         "1": list_movies,
         "2": add_movie,
         "3": delete_movie,
-        "4": stats,
-        "5": random_movie,
-        "6": search_movie,
-        "7": movies_sorted_by_rating,
-        "8": generate_website,
+        "4": update_movie,
+        "5": stats,
+        "6": random_movie,
+        "7": search_movie,
+        "8": movies_sorted_by_rating,
+        "9": generate_website,
     }
 
     if chosen_option == "0":
         print(f"{PROMPT_COLOR}Bye!")
         return False
 
-    if chosen_option == "9":
+    if chosen_option == "10":
         return select_user_profile()
 
     if chosen_option in menu_dispatcher:
@@ -128,10 +124,11 @@ def execute_users_choice(chosen_option, active_user):
             TypeError,
             KeyError,
             RuntimeError,
+            FileNotFoundError,
         ) as error:
             print(f"{Fore.RED}Unexpected error: {error}")
     else:
-        print(f"{Fore.RED}Invalid choice. Please enter a number from 0 to 9.")
+        print(f"{Fore.RED}Invalid choice. Please enter a number from 0 to 10.")
 
     show_menu(wait_for_input=True, active_user=active_user)
     return None
@@ -165,10 +162,13 @@ def list_movies(active_user):
     )
 
     for title, movie_data in movies.items():
+        note = movie_data.get("note") or "No note"
+
         print(
             f"{title}: "
             f"({movie_data['year']}), "
-            f"{movie_data['rating']}"
+            f"{movie_data['rating']} "
+            f"| Note: {note}"
         )
 
 
@@ -185,6 +185,27 @@ def add_movie(active_user):
         print(f"{Fore.RED}Movie '{title}' already exists in your collection!")
 
     storage.add_movie(title, active_user["id"], active_user["name"])
+
+
+def update_movie(active_user):
+    """Add or update a note for a movie."""
+    movies = storage.list_movies(active_user["id"])
+
+    if not movies:
+        print(f"{Fore.RED}No movies found.")
+        return
+
+    title = get_non_empty_input("Enter movie name: ")
+
+    if title not in movies:
+        print(f"{Fore.RED}Movie '{title}' does not exist.")
+        return
+
+    note = get_non_empty_input("Enter movie note: ")
+
+    storage.update_movie_note(title, note, active_user["id"])
+
+    print(f"{PROMPT_COLOR}Movie '{title}' successfully updated.")
 
 
 def delete_movie(active_user):
@@ -364,26 +385,33 @@ def generate_website(active_user):
     for title, movie_data in movies.items():
         poster_url = movie_data.get("poster_url")
         year = movie_data.get("year")
+        note = movie_data.get("note") or ""
+
+        note_html = ""
+
+        if note:
+            note_html = f'<div class="movie-note">{note}</div>'
 
         movie_grid += f"""
         <li>
             <div class="movie">
-                <img class="movie-poster"
-                     src="{poster_url}"/>
+                <div class="poster-wrapper">
+                    <img class="movie-poster"
+                         src="{poster_url}"
+                         alt="{title}"
+                         title="{note}"/>
+                    {note_html}
+                </div>
                 <div class="movie-title">{title}</div>
                 <div class="movie-year">{year}</div>
             </div>
         </li>
         """
 
-    html_content = template.replace(
-        "__TEMPLATE_MOVIE_GRID__",
-        movie_grid
-    )
-
-    html_content = html_content.replace(
-        "__USERNAME__",
-        active_user["name"]
+    html_content = (
+        template
+        .replace("__TEMPLATE_MOVIE_GRID__", movie_grid)
+        .replace("__USERNAME__", active_user["name"])
     )
 
     filename = f"{active_user['name']}_movies.html"
@@ -391,4 +419,4 @@ def generate_website(active_user):
     with open(filename, "w", encoding="utf-8") as file:
         file.write(html_content)
 
-    print(f"Website '{filename}' was generated successfully.")
+    print(f"{PROMPT_COLOR}Website '{filename}' was generated successfully.")
